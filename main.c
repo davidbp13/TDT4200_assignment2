@@ -7,12 +7,12 @@
 #define YSIZE 2048
 
 /*Idea:
- * Take a scatter/gather example as a base
- * Process 0 will verify if the number of process is valid
- * Process 0 will liad the image
- * Process 0 will use scatter to split the rows among the number of processes
- * Each process will perform some kind of computation in their own row and return the finished row
- * Process 0 will gather all the results and save the image
+ * Take a scatter/gather example as a base *
+ * Process 0 will verify if the number of process is valid *
+ * Process 0 will load the image *
+ * Process 0 will use scatter to split the rows among the number of processes -
+ * Each process will perform some kind of computation in their own row and return the finished row -
+ * Process 0 will gather all the results and save the image -
 */
 
 int main(int argc, char** argv) {
@@ -24,60 +24,63 @@ int main(int argc, char** argv) {
 	int num_proc;
 	MPI_Comm_size(MPI_COMM_WORLD, &num_proc);
 	
+	// Check if the number of processes is valid
+	if (YSIZE % num_proc != 0){
+		if (my_rank == 0) {
+			printf("ERROR: the number of processes is not a multiple of %d\n", YSIZE); 
+		}
+		
+		// Finalize MPI
+		MPI_Barrier(MPI_COMM_WORLD);
+		MPI_Finalize();
+	
+		return 0;
+	}
+	
 	// Root proceess reads the image
+	int image_size = XSIZE * YSIZE * 3;
 	uchar *image = NULL;
 	if (my_rank == 0) {
-		uchar *image = calloc(XSIZE * YSIZE * 3, 1); // Three uchars per pixel (RGB)
+		uchar *image = calloc(image_size, 1); // Three uchars per pixel (RGB)
 		readbmp("before.bmp", image);
+		printf("Process %d read the image succesfully\n", my_rank);
 	}
 	
 	// Allocate a subset of the image for each of the processes
-	uchar *subset = (uchar *)malloc(sizeof(uchar) * XSIZE * 3);
-	//assert(subset != NULL);
+	int image_chunk_size = (YSIZE / num_proc) * XSIZE * 3;
+	uchar *subset = calloc(image_chunk_size, 1);
+	printf("Process %d allocated chunk size of %d succesfully\n", my_rank, image_chunk_size);
 
-	// Scatter image between the processes
-	MPI_Scatter(image,
-				XSIZE*3, 
-				MPI_UNSIGNED_CHAR, 
-				subset,
-				XSIZE*3, 
-				MPI_UNSIGNED_CHAR, 
-				0, 
-				MPI_COMM_WORLD);
+	// Scatter image between the processes. It will produce an array called subset with a piece of the image in each process
+	/*MPI_Scatter(image, 				// Data on root process
+				image_chunk_size, 	// Number of elements sent to each process
+				MPI_UNSIGNED_CHAR, 	// Data type
+				subset,				// Where to place the scattered data
+				image_chunk_size, 	// Number of elements to receive
+				MPI_UNSIGNED_CHAR,  // Data type
+				0, 					// Rank of root process
+				MPI_COMM_WORLD);	// MPI communicator*/
+	printf("Process %d scattered succesfully\n", my_rank);
 	
-	// Gather the results from the processes
+	// Do something to each data chunck
+	
+	// Gather the results from the processes. It will take all the image pieces and place them in output_image
 	uchar *output_image = NULL;
 	if (my_rank == 0) {
-		output_image = (uchar *)malloc(sizeof(uchar) * XSIZE * YSIZE * 3);
-		//assert(output_image != NULL);
+		output_image = calloc(image_size, 1);
 	}
-	MPI_Gather(&subset, 
-				XSIZE*3, 
-				MPI_UNSIGNED_CHAR, 
-				output_image, 
-				XSIZE*3, 
-				MPI_UNSIGNED_CHAR, 
-				0, 
-				MPI_COMM_WORLD);
-	
-	/*// Master process
-	if (my_rank == 0){
-		// Process 0 will verify that the number of processes is right, otherwise it will show and error and finish
-		if (YSIZE % num_proc != 0) {
-			printf("ERROR: the number of processes is not a multiple of %d\n", YSIZE); 
-		}
-		else{
-			
-		}
-	else{
-		//Other processes
-		printf("Hey we still are doing stuff :)\n"); 
-	}
-	*/
+	MPI_Gather(&subset, 			// Data to gather
+				image_chunk_size, 	// Number of elements of each gathered data
+				MPI_UNSIGNED_CHAR, 	// Data type
+				output_image, 		// Where to place gathered data
+				image_chunk_size, 	// Number of elements recevied per process
+				MPI_UNSIGNED_CHAR,  // Data type
+				0, 					// Rank of root process
+				MPI_COMM_WORLD);	// MPI communicator
 	
 	// Root proceess saves the image
 	if (my_rank == 0) {
-		savebmp("after.bmp", image, XSIZE, YSIZE);
+		savebmp("after.bmp", output_image, XSIZE, YSIZE);
 	}
 		
 	// Clean up
@@ -90,7 +93,6 @@ int main(int argc, char** argv) {
 	// Finalize MPI
 	MPI_Barrier(MPI_COMM_WORLD);
 	MPI_Finalize();
-	
 	
 	return 0;
 }
