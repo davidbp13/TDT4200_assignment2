@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <mpi.h> // To use MPI APIs
+#include <assert.h>
 #include "bitmap.h"
 
 #define XSIZE 2560 // Size of before image
@@ -41,25 +42,30 @@ int main(int argc, char** argv) {
 	int image_size = XSIZE * YSIZE * 3;
 	uchar *image = NULL;
 	if (my_rank == 0) {
-		uchar *image = calloc(image_size, 1); // Three uchars per pixel (RGB)
+		//uchar *image = calloc(image_size, 1); // Three uchars per pixel (RGB)
+		image = (uchar *)malloc(sizeof(uchar) * image_size);
+		assert(image != NULL);
 		readbmp("before.bmp", image);
 		printf("Process %d read the image succesfully\n", my_rank);
 	}
 	
-	// Allocate a subset of the image for each of the processes
+	// For each process, create a buffer that will hold a subset of the entire image
 	int image_chunk_size = (YSIZE / num_proc) * XSIZE * 3;
-	uchar *subset = calloc(image_chunk_size, 1);
+	//uchar *subset = calloc(image_chunk_size, 1);
+	uchar *subset = NULL;
+	subset = (uchar *)malloc(sizeof(uchar) * image_chunk_size);
+	assert(subset != NULL);
 	printf("Process %d allocated chunk size of %d succesfully\n", my_rank, image_chunk_size);
 
 	// Scatter image between the processes. It will produce an array called subset with a piece of the image in each process
-	/*MPI_Scatter(image, 				// Data on root process
+	MPI_Scatter(image, 				// Data on root process
 				image_chunk_size, 	// Number of elements sent to each process
 				MPI_UNSIGNED_CHAR, 	// Data type
 				subset,				// Where to place the scattered data
 				image_chunk_size, 	// Number of elements to receive
 				MPI_UNSIGNED_CHAR,  // Data type
 				0, 					// Rank of root process
-				MPI_COMM_WORLD);	// MPI communicator*/
+				MPI_COMM_WORLD);	// MPI communicator
 	printf("Process %d scattered succesfully\n", my_rank);
 	
 	// Do something to each data chunck
@@ -67,9 +73,10 @@ int main(int argc, char** argv) {
 	// Gather the results from the processes. It will take all the image pieces and place them in output_image
 	uchar *output_image = NULL;
 	if (my_rank == 0) {
-		output_image = calloc(image_size, 1);
+		output_image = (uchar *)malloc(sizeof(uchar) * image_size);
+		assert(output_image != NULL);
 	}
-	MPI_Gather(&subset, 			// Data to gather
+	MPI_Gather(subset, 				// Data to gather
 				image_chunk_size, 	// Number of elements of each gathered data
 				MPI_UNSIGNED_CHAR, 	// Data type
 				output_image, 		// Where to place gathered data
@@ -77,6 +84,7 @@ int main(int argc, char** argv) {
 				MPI_UNSIGNED_CHAR,  // Data type
 				0, 					// Rank of root process
 				MPI_COMM_WORLD);	// MPI communicator
+	printf("Process %d gathered succesfully\n", my_rank);
 	
 	// Root proceess saves the image
 	if (my_rank == 0) {
