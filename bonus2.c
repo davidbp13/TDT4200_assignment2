@@ -65,13 +65,29 @@ int main(int argc, char** argv) {
 				 MPI_COMM_WORLD);		// MPI communicator
 	//printf("Process %d scattered succesfully\n", my_rank);
 	
-	// Invert colors in each of the subsets of the image
+	// Invert colors in a checkered pattern of the subsets of the image
+	int row_number = (YSIZE / num_proc) * (displs[my_rank] / sendcounts[my_rank]);
+	//printf("displs = %d, sendcounts = %d, row number = %d\n", displs[my_rank], sendcounts[my_rank], row_number);
 	for (int i=0; i<(sendcounts[my_rank] / (XSIZE*3)); i++ ) { // To iterate through rows
-		for (int j=0; j<XSIZE*3; j+=3) { // To iterate through columns (and each pixel component)
-			subset[3 * i * XSIZE + j + 0] = 255 - subset[3 * i * XSIZE + j + 0]; 
-			subset[3 * i * XSIZE + j + 1] = 255 - subset[3 * i * XSIZE + j + 1]; 
-			subset[3 * i * XSIZE + j + 2] = 255 - subset[3 * i * XSIZE + j + 2]; 
+		for (int j=0; j<XSIZE*3; j+=6) { // To iterate through columns (and each pixel component)
+			if (row_number % 2 == 0){
+				subset[3 * i * XSIZE + j + 0] = 255 - subset[3 * i * XSIZE + j + 0]; 
+				subset[3 * i * XSIZE + j + 1] = 255 - subset[3 * i * XSIZE + j + 1]; 
+				subset[3 * i * XSIZE + j + 2] = 255 - subset[3 * i * XSIZE + j + 2]; 
+				subset[3 * i * XSIZE + j + 3] = subset[3 * i * XSIZE + j + 3]; 
+				subset[3 * i * XSIZE + j + 4] = subset[3 * i * XSIZE + j + 4]; 
+				subset[3 * i * XSIZE + j + 5] = subset[3 * i * XSIZE + j + 5]; 
+			}
+			else{
+				subset[3 * i * XSIZE + j + 0] = subset[3 * i * XSIZE + j + 0]; 
+				subset[3 * i * XSIZE + j + 1] = subset[3 * i * XSIZE + j + 1]; 
+				subset[3 * i * XSIZE + j + 2] = subset[3 * i * XSIZE + j + 2]; 
+				subset[3 * i * XSIZE + j + 3] = 255 - subset[3 * i * XSIZE + j + 3]; 
+				subset[3 * i * XSIZE + j + 4] = 255 - subset[3 * i * XSIZE + j + 4]; 
+				subset[3 * i * XSIZE + j + 5] = 255 - subset[3 * i * XSIZE + j + 5]; 
+			}
 		}
+		row_number++;
 	}
 	
 	// Gather the results from the processes
